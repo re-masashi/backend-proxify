@@ -2,13 +2,12 @@
 
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
 from jose import jwt
 
 from .core import settings
-from .dependencies import get_current_admin_user
 from .database import SessionLocal
-from . import crud, models
+from . import crud
+
 
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
@@ -38,7 +37,7 @@ class AdminAuth(AuthenticationBackend):
             return False
         finally:
             db.close()
-        
+
         return False
 
     async def logout(self, request: Request) -> bool:

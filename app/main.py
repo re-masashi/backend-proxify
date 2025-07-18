@@ -1,5 +1,12 @@
-import json
-from fastapi import FastAPI, Depends, HTTPException, Request, Response, status, APIRouter
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    status,
+    APIRouter,
+)
 from sqlalchemy.orm import Session
 from svix.webhooks import Webhook, WebhookVerificationError
 import uuid
@@ -10,7 +17,13 @@ from . import crud, models, schemas
 from .core import settings
 from .database import engine, get_db
 from .dependencies import get_current_user_id, get_current_admin_user
-from .admin import UserAdmin, AlertAdmin, AdminReviewAdmin, WarningAdmin, FeaturedItemAdmin
+from .admin import (
+    UserAdmin,
+    AlertAdmin,
+    AdminReviewAdmin,
+    WarningAdmin,
+    FeaturedItemAdmin,
+)
 from .admin_auth import authentication_backend
 
 # Create all database tables on startup
@@ -20,16 +33,17 @@ app = FastAPI(title="Proxify")
 
 router_webhooks = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
 
+
 @router_webhooks.post("/clerk", status_code=status.HTTP_200_OK)
 async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
     headers = request.headers
     try:
         payload_bytes = await request.body()
         wh = Webhook(settings.CLERK_WEBHOOK_SECRET)
-        evt = wh.verify(payload_bytes.decode('utf-8'), headers)
+        evt = wh.verify(payload_bytes.decode("utf-8"), headers)
     except WebhookVerificationError as e:
         raise HTTPException(status_code=400, detail=f"Webhook verification failed: {e}")
-    
+
     event_type = evt.get("type")
     data = evt.get("data")
 
@@ -45,22 +59,28 @@ async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
         user_in = schemas.UserCreate(userid=clerk_user_id, email=email)
         crud.create_user(db=db, user=user_in)
         return {"message": f"Successfully created user {clerk_user_id}"}
-    
+
     return Response(status_code=status.HTTP_200_OK)
+
 
 # --- Alerts Router (for authenticated users) ---
 router_alerts = APIRouter(prefix="/alerts", tags=["Alerts"])
 
-@router_alerts.post("/", response_model=schemas.AlertResponse, status_code=status.HTTP_201_CREATED)
+
+@router_alerts.post(
+    "/", response_model=schemas.AlertResponse, status_code=status.HTTP_201_CREATED
+)
 def create_alert(
     alert: schemas.AlertCreate,
     db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id),
 ):
     user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Authenticated user not found in database.")
-    
+        raise HTTPException(
+            status_code=404, detail="Authenticated user not found in database."
+        )
+
     # TODO: Trigger AI review in a background task after creation
     return crud.create_alert(db=db, alert=alert, user_id=user.id)
 
@@ -69,7 +89,9 @@ def create_alert(
 router_admin = APIRouter(
     prefix="/api/admin/alerts",
     tags=["Admin"],
-    dependencies=[Depends(get_current_admin_user)] # Protects all endpoints in this router
+    dependencies=[
+        Depends(get_current_admin_user)
+    ],  # Protects all endpoints in this router
 )
 
 
@@ -77,51 +99,69 @@ router_admin = APIRouter(
 def debug_get_votes(
     alert_id: uuid.UUID,
     db: Session = Depends(get_db),
-    admin_user: models.User = Depends(get_current_admin_user)
+    admin_user: models.User = Depends(get_current_admin_user),
 ):
     """Temporary debug endpoint to check vote counts"""
     approvals, rejections = crud.count_alert_votes(db, alert_id=alert_id)
-    
+
     # Get all votes for this alert
-    votes = db.query(models.AdminReview).filter(models.AdminReview.alert_id == alert_id).all()
-    vote_details = [{"admin_id": str(vote.admin_id), "vote": vote.vote} for vote in votes]
-    
+    votes = (
+        db.query(models.AdminReview)
+        .filter(models.AdminReview.alert_id == alert_id)
+        .all()
+    )
+    vote_details = [
+        {"admin_id": str(vote.admin_id), "vote": vote.vote} for vote in votes
+    ]
+
     return {
         "alert_id": alert_id,
         "approvals": approvals,
         "rejections": rejections,
-        "vote_details": vote_details
+        "vote_details": vote_details,
     }
+
 
 @router_admin.get("/pending", response_model=List[schemas.AlertResponse])
 def get_pending_alerts_for_review(db: Session = Depends(get_db)):
     return crud.get_pending_alerts(db)
+
 
 @router_admin.post("/{alert_id}/review", response_model=schemas.AdminReviewResponse)
 def review_alert(
     alert_id: uuid.UUID,
     review: schemas.AdminReviewCreate,
     db: Session = Depends(get_db),
-    admin_user: models.User = Depends(get_current_admin_user)
+    admin_user: models.User = Depends(get_current_admin_user),
 ):
     alert = crud.get_alert_by_id(db, alert_id=alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found.")
-    
-    if alert.status == 'reviewed':
-        raise HTTPException(status_code=400, detail="This alert has already been reviewed and approved.")
 
-    if crud.get_review_by_admin_and_alert(db, alert_id=alert_id, admin_id=admin_user.id):
-        raise HTTPException(status_code=400, detail="You have already voted on this alert.")
-    
+    if alert.status == "reviewed":
+        raise HTTPException(
+            status_code=400, detail="This alert has already been reviewed and approved."
+        )
+
+    if crud.get_review_by_admin_and_alert(
+        db, alert_id=alert_id, admin_id=admin_user.id
+    ):
+        raise HTTPException(
+            status_code=400, detail="You have already voted on this alert."
+        )
+
     # Add the vote first
-    crud.add_admin_review(db=db, alert_id=alert_id, admin_id=admin_user.id, vote=review.vote)
+    crud.add_admin_review(
+        db=db, alert_id=alert_id, admin_id=admin_user.id, vote=review.vote
+    )
     db.flush()  # Ensure the vote is written to the database
-    
+
     # Now get the updated vote counts
     approvals, rejections = crud.count_alert_votes(db, alert_id=alert_id)
-    
-    print(f"DEBUG: Alert {alert_id} - Approvals: {approvals}, Rejections: {rejections}")  # Debug line
+
+    print(
+        f"DEBUG: Alert {alert_id} - Approvals: {approvals}, Rejections: {rejections}"
+    )  # Debug line
 
     # Handle rejection logic
     if rejections >= 3:
@@ -130,9 +170,9 @@ def review_alert(
         return {
             "message": f"Alert {alert_id} has been deleted after {rejections} rejections.",
             "alert_id": alert_id,
-            "status": "deleted"
+            "status": "deleted",
         }
-    
+
     # Handle approval logic
     if approvals >= 2:
         alert.status = "reviewed"  # Update the status directly
@@ -140,7 +180,7 @@ def review_alert(
         return {
             "message": f"Alert {alert_id} has been approved with {approvals} votes.",
             "alert_id": alert_id,
-            "status": "reviewed"
+            "status": "reviewed",
         }
 
     # If no threshold was met, just commit the vote
@@ -148,8 +188,9 @@ def review_alert(
     return {
         "message": "Vote recorded successfully.",
         "alert_id": alert_id,
-        "status": alert.status
+        "status": alert.status,
     }
+
 
 admin = Admin(app, engine, authentication_backend=authentication_backend)
 

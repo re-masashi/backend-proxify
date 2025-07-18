@@ -36,80 +36,92 @@ def db_session(setup_test_database):
 
 # tests/conftest.py
 
+
 @pytest.fixture(scope="function")
 def client(db_session):
     # This will hold the current user ID for the mock
     current_user_id = {"value": None}
-    
+
     # Mock the basic auth dependency
     def override_get_current_user_id():
         if current_user_id["value"] is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="Not authenticated")
         return current_user_id["value"]
-    
+
     # Mock the admin auth dependency
     def override_get_current_admin_user():
         if current_user_id["value"] is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="Not authenticated")
-        
+
         # Find the user in the database
         from app import crud
-        user = crud.get_user_by_clerk_id(db_session, clerk_user_id=current_user_id["value"])
+
+        user = crud.get_user_by_clerk_id(
+            db_session, clerk_user_id=current_user_id["value"]
+        )
         if not user:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="User not found in database")
         if not user.is_admin:
-            from fastapi import HTTPException  
+            from fastapi import HTTPException
+
             raise HTTPException(status_code=403, detail="Not an admin")
         return user
-    
+
     # Override the database dependency
     def override_get_db():
         yield db_session
-    
+
     # Apply all overrides
-    from app.dependencies import get_current_user_id, get_current_admin_user
-    from app.database import get_db
-    
+    from app.dependencies import get_current_admin_user
+
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
     app.dependency_overrides[get_db] = override_get_db
-    
+
     client_instance = TestClient(app)
-    
+
     # Add helper methods
     def set_user_id(user_id):
         current_user_id["value"] = user_id
-    
+
     def clear_user_id():
         current_user_id["value"] = None
-    
+
     client_instance.set_user_id = set_user_id
     client_instance.clear_user_id = clear_user_id
-    
+
     yield client_instance
-    
+
     # Clean up
     app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def auth_headers():
     """
     Factory fixture to create authentication headers for a given user.
     """
+
     def _auth_headers(user: models.User):
         return {"Authorization": f"Bearer {user.userid}"}
-    
+
     return _auth_headers
 
 
 # --- Re-usable data fixtures ---
 
+
 @pytest.fixture
 def test_user(db_session):
-    user_data = schemas.UserCreate(userid="user_regular_123", email="testuser@example.com")
+    user_data = schemas.UserCreate(
+        userid="user_regular_123", email="testuser@example.com"
+    )
     user = models.User(**user_data.model_dump())
     db_session.add(user)
     db_session.commit()
@@ -119,7 +131,9 @@ def test_user(db_session):
 
 @pytest.fixture
 def test_admin(db_session):
-    admin_data = schemas.UserCreate(userid="user_admin_123", email="admin@example.com", is_admin=True)
+    admin_data = schemas.UserCreate(
+        userid="user_admin_123", email="admin@example.com", is_admin=True
+    )
     user = models.User(**admin_data.model_dump())
     db_session.add(user)
     db_session.commit()

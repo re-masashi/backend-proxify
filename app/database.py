@@ -12,6 +12,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 Base = declarative_base()
 
+
 # Dependency to get DB session in API endpoints
 def get_db():
     db = SessionLocal()

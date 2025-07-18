@@ -14,6 +14,7 @@ from . import crud, models
 # A simple in-memory cache to store Clerk's public keys
 jwks_cache: Dict = {}
 
+
 def get_jwks() -> Dict:
     """
     Retrieves and caches the JSON Web Key Set (JWKS) from Clerk.
@@ -38,7 +39,9 @@ async def get_current_user_id(request: Request) -> str:
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     try:
         token_type, token = auth_header.split()
@@ -46,19 +49,24 @@ async def get_current_user_id(request: Request) -> str:
             raise HTTPException(status_code=401, detail="Invalid authentication scheme")
 
         jwks = get_jwks()
-        
+
         # Get the unverified header to find the Key ID (kid)
         unverified_header = jwt.get_unverified_header(token)
         rsa_key = {}
         for key in jwks["keys"]:
             if key["kid"] == unverified_header["kid"]:
                 rsa_key = {
-                    "kty": key["kty"], "kid": key["kid"], "use": key["use"],
-                    "n": key["n"], "e": key["e"]
+                    "kty": key["kty"],
+                    "kid": key["kid"],
+                    "use": key["use"],
+                    "n": key["n"],
+                    "e": key["e"],
                 }
-        
+
         if not rsa_key:
-            raise HTTPException(status_code=401, detail="Unable to find appropriate key")
+            raise HTTPException(
+                status_code=401, detail="Unable to find appropriate key"
+            )
 
         # Verify the token's signature and claims
         payload = jwt.decode(
@@ -76,14 +84,18 @@ async def get_current_user_id(request: Request) -> str:
         return user_id
 
     except (JWTError, ExpiredSignatureError, JWTClaimsError) as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}"
+        )
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )
 
 
 async def get_current_admin_user(
-    current_user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
+    current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)
 ) -> models.User:
     """
     Depends on the standard user auth, then checks if the user is an admin.
@@ -92,5 +104,7 @@ async def get_current_admin_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found in our database.")
     if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Forbidden: Requires admin privileges.")
+        raise HTTPException(
+            status_code=403, detail="Forbidden: Requires admin privileges."
+        )
     return user
