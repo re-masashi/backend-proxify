@@ -67,6 +67,69 @@ async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
 router_alerts = APIRouter(prefix="/alerts", tags=["Alerts"])
 
 
+@router_alerts.get("/", response_model=List[schemas.AlertResponse])
+def get_alerts(
+    db: Session = Depends(get_db),
+    status: str = "reviewed",  # Only show approved alerts
+    limit: int = 50,
+):
+    """
+    Get all approved alerts for the home page.
+    """
+    alerts = (
+        db.query(models.Alert)
+        .filter(models.Alert.status == status)
+        .order_by(models.Alert.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return alerts
+
+
+@router_alerts.get("/nearby", response_model=List[schemas.AlertResponse])
+def get_nearby_alerts(
+    lat: float, lon: float, radius_km: float = 10.0, db: Session = Depends(get_db)
+):
+    """
+    Get alerts within a specified radius (in kilometers).
+    """
+    from sqlalchemy import func
+
+    # Convert radius to meters for PostGIS
+    radius_meters = radius_km * 1000
+
+    alerts = (
+        db.query(models.Alert)
+        .filter(
+            models.Alert.status == "reviewed",
+            func.ST_DWithin(
+                models.Alert.location,
+                func.ST_GeomFromText(f"POINT({lon} {lat})", 4326),
+                radius_meters,
+            ),
+        )
+        .order_by(models.Alert.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    return alerts
+
+
+@router_alerts.get("/{alert_id}", response_model=schemas.AlertResponse)
+def get_alert_by_id(alert_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Get a specific alert by ID.
+    """
+    alert = crud.get_alert_by_id(db, alert_id=alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.status != "reviewed":
+        raise HTTPException(status_code=403, detail="Alert not approved")
+    return alert
+
+
 @router_alerts.post(
     "/", response_model=schemas.AlertResponse, status_code=status.HTTP_201_CREATED
 )
