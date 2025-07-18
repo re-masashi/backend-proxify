@@ -5,11 +5,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app
+from app import models, schemas
+from app.core import settings
 from app.database import Base, get_db
 from app.dependencies import get_current_user_id
-from app.core import settings
-from app import models, schemas
+from app.main import app
 
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

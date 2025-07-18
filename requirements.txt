@@ -8,9 +8,16 @@ GeoAlchemy2
 svix
 python-jose[cryptography]
 sqladmin
+requests
 
 # for tests
 pytest
 pytest-cov
 httpx
-requests
+pytest-html
+pytest-json-report
+ruff
+mypy
+bandit
+safety
+locust

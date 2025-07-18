@@ -1,12 +1,12 @@
 # app/admin_auth.py
 
+from jose import jwt
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
-from jose import jwt
 
+from . import crud
 from .core import settings
 from .database import SessionLocal
-from . import crud
 
 
 class AdminAuth(AuthenticationBackend):

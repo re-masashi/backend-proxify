@@ -1,4 +1,6 @@
 import uuid
+
+from geoalchemy2 import Geography
 from sqlalchemy import (
     Boolean,
     Column,
@@ -12,7 +14,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from geoalchemy2 import Geography
 
 from .database import Base
 

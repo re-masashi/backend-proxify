@@ -1,0 +1,63 @@
+[tool.ruff]
+# Python version
+target-version = "py311"
+
+# Line length
+line-length = 88
+
+# Directories to check
+src = ["app", "tests"]
+
+# Exclude directories
+exclude = [
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "migrations",
+    "venv",
+    ".venv",
+]
+
+[tool.ruff.format]
+# Format options
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore specific rules in test files
+"tests/*" = ["S101", "ARG001", "ARG002"]
+# Ignore import rules in __init__.py
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+# isort configuration
+known-first-party = ["app"]
+force-single-line = false
+
+[tool.ruff.lint]
+# Rules to ignore
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "S101",  # Use of assert (OK in tests)
+    "S311",  # Cryptographic random (not needed for this app)
+]
+
+# Enable specific rule categories
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "S",   # bandit (security)
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "RUF", # Ruff-specific rules
+]

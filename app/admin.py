@@ -1,31 +1,46 @@
 # app/admin.py
 
+from typing import ClassVar
+
 from sqladmin import ModelView
-from .models import User, Alert, AdminReview, Warning, FeaturedItem
+
+from .models import AdminReview, Alert, FeaturedItem, User, Warning
 
 
 class UserAdmin(ModelView, model=User):
-    column_list = [User.id, User.email, User.userid, User.is_admin, User.created_at]
-    column_searchable_list = [User.email, User.userid]
-    column_sortable_list = [User.created_at, User.is_admin]
+    column_list: ClassVar = [
+        User.id,
+        User.email,
+        User.userid,
+        User.is_admin,
+        User.created_at,
+    ]
+    column_searchable_list: ClassVar = [User.email, User.userid]
+    column_sortable_list: ClassVar = [User.created_at, User.is_admin]
     name = "User"
     name_plural = "Users"
     icon = "fa-solid fa-user"
 
 
 class AlertAdmin(ModelView, model=Alert):
-    column_list = [Alert.id, Alert.status, Alert.type, Alert.user, Alert.created_at]
-    column_details_exclude_list = [
+    column_list: ClassVar = [
+        Alert.id,
+        Alert.status,
+        Alert.type,
+        Alert.user,
+        Alert.created_at,
+    ]
+    column_details_exclude_list: ClassVar = [
         Alert.location
     ]  # Exclude raw location data from detail view
-    column_filters = [Alert.status, Alert.type]
+    column_filters: ClassVar = [Alert.status, Alert.type]
     name = "Alert"
     name_plural = "Alerts"
     icon = "fa-solid fa-triangle-exclamation"
 
 
 class AdminReviewAdmin(ModelView, model=AdminReview):
-    column_list = [
+    column_list: ClassVar = [
         AdminReview.alert_id,
         AdminReview.admin,
         AdminReview.vote,
@@ -37,7 +52,7 @@ class AdminReviewAdmin(ModelView, model=AdminReview):
 
 
 class WarningAdmin(ModelView, model=Warning):
-    column_list = [
+    column_list: ClassVar = [
         Warning.id,
         Warning.user,
         Warning.reason,
@@ -50,7 +65,7 @@ class WarningAdmin(ModelView, model=Warning):
 
 
 class FeaturedItemAdmin(ModelView, model=FeaturedItem):
-    column_list = [
+    column_list: ClassVar = [
         FeaturedItem.id,
         FeaturedItem.title,
         FeaturedItem.user,

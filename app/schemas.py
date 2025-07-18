@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
 import uuid
-from typing import List, Literal
 from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -23,7 +24,7 @@ class User(BaseModel):
 # --- Location Schemas ---
 class Location(BaseModel):
     type: Literal["Point"] = "Point"
-    coordinates: List[float] = Field(..., min_length=2, max_length=2)
+    coordinates: list[float] = Field(..., min_length=2, max_length=2)
 
     @field_validator("coordinates")
     @classmethod
@@ -46,7 +47,7 @@ class AlertCreate(BaseModel):
     type: Literal["alert", "news", "sale", "help", "event"]
     location: Location
     severity: int = Field(..., ge=1, le=5)
-    attachments: List[str] = Field(default_factory=list)
+    attachments: list[str] = Field(default_factory=list)
 
 
 class AlertResponse(BaseModel):
@@ -56,7 +57,7 @@ class AlertResponse(BaseModel):
     type: str
     status: str
     severity: int
-    attachments: List[str]
+    attachments: list[str]
     created_at: datetime
 
     class Config:

@@ -1,30 +1,31 @@
+import uuid
+from typing import Annotated
+
 from fastapi import (
-    FastAPI,
+    APIRouter,
     Depends,
+    FastAPI,
     HTTPException,
     Request,
     Response,
     status,
-    APIRouter,
 )
+from sqladmin import Admin
 from sqlalchemy.orm import Session
 from svix.webhooks import Webhook, WebhookVerificationError
-import uuid
-from sqladmin import Admin
-from typing import List
 
 from . import crud, models, schemas
-from .core import settings
-from .database import engine, get_db
-from .dependencies import get_current_user_id, get_current_admin_user
 from .admin import (
-    UserAdmin,
-    AlertAdmin,
     AdminReviewAdmin,
-    WarningAdmin,
+    AlertAdmin,
     FeaturedItemAdmin,
+    UserAdmin,
+    WarningAdmin,
 )
 from .admin_auth import authentication_backend
+from .core import settings
+from .database import engine, get_db
+from .dependencies import get_current_admin_user, get_current_user_id
 
 # Create all database tables on startup
 models.Base.metadata.create_all(bind=engine)
@@ -35,14 +36,17 @@ router_webhooks = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
 
 
 @router_webhooks.post("/clerk", status_code=status.HTTP_200_OK)
-async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
+async def clerk_webhook(request: Request, db: Annotated[Session, Depends(get_db)]):
     headers = request.headers
     try:
         payload_bytes = await request.body()
         wh = Webhook(settings.CLERK_WEBHOOK_SECRET)
-        evt = wh.verify(payload_bytes.decode("utf-8"), headers)
+        headers_dict = dict(headers)
+        evt = wh.verify(payload_bytes.decode("utf-8"), headers_dict)
     except WebhookVerificationError as e:
-        raise HTTPException(status_code=400, detail=f"Webhook verification failed: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Webhook verification failed: {e}"
+        ) from None
 
     event_type = evt.get("type")
     data = evt.get("data")
@@ -67,9 +71,9 @@ async def clerk_webhook(request: Request, db: Session = Depends(get_db)):
 router_alerts = APIRouter(prefix="/alerts", tags=["Alerts"])
 
 
-@router_alerts.get("/", response_model=List[schemas.AlertResponse])
+@router_alerts.get("/", response_model=list[schemas.AlertResponse])
 def get_alerts(
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
     status: str = "reviewed",  # Only show approved alerts
     limit: int = 50,
 ):
@@ -87,9 +91,12 @@ def get_alerts(
     return alerts
 
 
-@router_alerts.get("/nearby", response_model=List[schemas.AlertResponse])
+@router_alerts.get("/nearby", response_model=list[schemas.AlertResponse])
 def get_nearby_alerts(
-    lat: float, lon: float, radius_km: float = 10.0, db: Session = Depends(get_db)
+    lat: float,
+    lon: float,
+    db: Annotated[Session, Depends(get_db)],
+    radius_km: float = 10.0,
 ):
     """
     Get alerts within a specified radius (in kilometers).
@@ -118,7 +125,7 @@ def get_nearby_alerts(
 
 
 @router_alerts.get("/{alert_id}", response_model=schemas.AlertResponse)
-def get_alert_by_id(alert_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_alert_by_id(alert_id: uuid.UUID, db: Annotated[Session, Depends(get_db)]):
     """
     Get a specific alert by ID.
     """
@@ -135,8 +142,8 @@ def get_alert_by_id(alert_id: uuid.UUID, db: Session = Depends(get_db)):
 )
 def create_alert(
     alert: schemas.AlertCreate,
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
     if not user:
@@ -161,8 +168,8 @@ router_admin = APIRouter(
 @router_admin.get("/{alert_id}/votes")
 def debug_get_votes(
     alert_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    admin_user: models.User = Depends(get_current_admin_user),
+    db: Annotated[Session, Depends(get_db)],
+    _admin_user: Annotated[models.User, Depends(get_current_admin_user)],
 ):
     """Temporary debug endpoint to check vote counts"""
     approvals, rejections = crud.count_alert_votes(db, alert_id=alert_id)
@@ -185,8 +192,8 @@ def debug_get_votes(
     }
 
 
-@router_admin.get("/pending", response_model=List[schemas.AlertResponse])
-def get_pending_alerts_for_review(db: Session = Depends(get_db)):
+@router_admin.get("/pending", response_model=list[schemas.AlertResponse])
+def get_pending_alerts_for_review(db: Annotated[Session, Depends(get_db)]):
     return crud.get_pending_alerts(db)
 
 
@@ -194,8 +201,9 @@ def get_pending_alerts_for_review(db: Session = Depends(get_db)):
 def review_alert(
     alert_id: uuid.UUID,
     review: schemas.AdminReviewCreate,
-    db: Session = Depends(get_db),
-    admin_user: models.User = Depends(get_current_admin_user),
+    db: Annotated[Session, Depends(get_db)],
+    admin_user: Annotated[models.User, Depends(get_current_admin_user)],
+    # models.User = Depends(get_current_admin_user),
 ):
     alert = crud.get_alert_by_id(db, alert_id=alert_id)
     if not alert:

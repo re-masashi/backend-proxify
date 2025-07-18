@@ -1,21 +1,23 @@
 # app/dependencies.py
 
-import requests
-from fastapi import Depends, HTTPException, status, Request
-from jose import jwt
-from jose.exceptions import JWTError, ExpiredSignatureError, JWTClaimsError
-from sqlalchemy.orm import Session
-from typing import Dict
 
+from typing import Annotated
+
+import requests
+from fastapi import Depends, HTTPException, Request, status
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTClaimsError, JWTError
+from sqlalchemy.orm import Session
+
+from . import crud, models
 from .core import settings
 from .database import get_db
-from . import crud, models
 
 # A simple in-memory cache to store Clerk's public keys
-jwks_cache: Dict = {}
+jwks_cache: dict = {}
 
 
-def get_jwks() -> Dict:
+def get_jwks() -> dict:
     """
     Retrieves and caches the JSON Web Key Set (JWKS) from Clerk.
     """
@@ -24,13 +26,13 @@ def get_jwks() -> Dict:
 
     jwks_url = f"{settings.CLERK_ISSUER_URL}/.well-known/jwks.json"
     try:
-        response = requests.get(jwks_url)
+        response = requests.get(jwks_url, timeout=300)
         response.raise_for_status()
         jwks = response.json()
         jwks_cache["keys"] = jwks["keys"]
         return jwks_cache
     except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Could not fetch JWKS: {e}")
+        raise HTTPException(status_code=500, detail=f"Could not fetch JWKS: {e}") from e
 
 
 async def get_current_user_id(request: Request) -> str:
@@ -86,16 +88,17 @@ async def get_current_user_id(request: Request) -> str:
     except (JWTError, ExpiredSignatureError, JWTClaimsError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}"
-        )
+        ) from e
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
-        )
+        ) from Exception
 
 
 async def get_current_admin_user(
-    current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> models.User:
     """
     Depends on the standard user auth, then checks if the user is an admin.
