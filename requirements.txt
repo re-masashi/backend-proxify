@@ -1,0 +1,15 @@
+fastapi[all]
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic-settings
+GeoAlchemy2
+svix
+python-jose[cryptography]
+sqladmin
+
+# for tests
+pytest
+pytest-cov
+httpx
+requests
