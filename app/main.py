@@ -337,13 +337,24 @@ def get_notifications(
     limit: int = 50,
 ):
     """Get notifications for the current user."""
+    # DEBUG: Add logging to see what's happening
+    print(f"🔍 Looking for user with Clerk ID: {current_user_id}")
+
     user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
     if not user:
+        print(f"🔴 User not found with Clerk ID: {current_user_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
+    print(f"🔍 Found user with UUID: {user.id}")
+
     notifications = crud.get_user_notifications(
-        db, user_id=user.id, unread_only=unread_only, limit=limit
+        db,
+        user_id=user.id,  # Make sure this is the UUID, not the Clerk ID
+        unread_only=unread_only,
+        limit=limit,
     )
+
+    print(f"🔍 Found {len(notifications)} notifications for user {user.id}")
     return notifications
 
 
@@ -353,11 +364,18 @@ def get_unread_count(
     current_user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     """Get count of unread notifications for the current user."""
+    print(f"🔍 Looking for user with Clerk ID: {current_user_id}")
+
     user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
     if not user:
+        print(f"🔴 User not found with Clerk ID: {current_user_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
+    print(f"🔍 Found user UUID: {user.id}")
+
     count = crud.get_unread_notification_count(db, user_id=user.id)
+    print(f"🔍 Unread count: {count}")
+
     return {"unread_count": count}
 
 

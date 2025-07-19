@@ -39,10 +39,8 @@ def db_session(setup_test_database):
 
 @pytest.fixture(scope="function")
 def client(db_session):
-    # This will hold the current user ID for the mock
     current_user_id = {"value": None}
 
-    # Mock the basic auth dependency
     def override_get_current_user_id():
         if current_user_id["value"] is None:
             from fastapi import HTTPException
@@ -50,14 +48,12 @@ def client(db_session):
             raise HTTPException(status_code=401, detail="Not authenticated")
         return current_user_id["value"]
 
-    # Mock the admin auth dependency
     def override_get_current_admin_user():
         if current_user_id["value"] is None:
             from fastapi import HTTPException
 
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        # Find the user in the database
         from app import crud
 
         user = crud.get_user_by_clerk_id(
@@ -73,20 +69,24 @@ def client(db_session):
             raise HTTPException(status_code=403, detail="Not an admin")
         return user
 
-    # Override the database dependency
+    # CRITICAL FIX: Create a function that returns the exact same session
     def override_get_db():
-        yield db_session
+        try:
+            yield db_session
+        finally:
+            pass  # Don't close the session, let pytest handle it
 
-    # Apply all overrides
+    # Import the app and dependencies
     from app.dependencies import get_current_admin_user
 
+    # Apply overrides BEFORE creating TestClient
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
     app.dependency_overrides[get_db] = override_get_db
 
+    # Now create client
     client_instance = TestClient(app)
 
-    # Add helper methods
     def set_user_id(user_id):
         current_user_id["value"] = user_id
 
@@ -98,7 +98,7 @@ def client(db_session):
 
     yield client_instance
 
-    # Clean up
+    # Clear overrides after test
     app.dependency_overrides.clear()
 
 

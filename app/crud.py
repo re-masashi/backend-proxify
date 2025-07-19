@@ -192,15 +192,25 @@ def create_notification(
 
 
 def get_user_notifications(
-    db: Session, user_id: uuid.UUID, unread_only: bool = False, limit: int = 50
+    db: Session,
+    user_id: uuid.UUID,  # This should be the UUID, not Clerk ID
+    unread_only: bool = False,
+    limit: int = 50,
 ) -> list[models.Notification]:
     """Get notifications for a specific user."""
+    print(f"🔍 CRUD: Looking for notifications for user_id: {user_id}")
+
     query = db.query(models.Notification).filter(models.Notification.user_id == user_id)
 
     if unread_only:
         query = query.filter(not models.Notification.read)
 
-    return query.order_by(models.Notification.created_at.desc()).limit(limit).all()
+    notifications = (
+        query.order_by(models.Notification.created_at.desc()).limit(limit).all()
+    )
+
+    print(f"🔍 CRUD: Found {len(notifications)} notifications")
+    return notifications
 
 
 def mark_notification_as_read(
@@ -226,13 +236,23 @@ def mark_notification_as_read(
 
 def mark_all_notifications_as_read(db: Session, user_id: uuid.UUID) -> int:
     """Mark all notifications as read for a user. Returns count of updated notifications."""
+    print(f"🔍 CRUD mark_all_notifications_as_read: user_id={user_id}")
+
+    # Debug: Check notifications before update
+    before_count = (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == user_id, not models.Notification.read)
+        .count()
+    )
+    print(f"🔍 Unread notifications before update: {before_count}")
+
     updated_count = (
         db.query(models.Notification)
-        .filter(
-            models.Notification.user_id == user_id, not models.Notification.read
-        )
+        .filter(models.Notification.user_id == user_id, not models.Notification.read)
         .update({"read": True})
     )
+
+    print(f"🔍 Updated count: {updated_count}")
 
     db.commit()
     return updated_count
@@ -261,13 +281,25 @@ def delete_notification(
 
 def get_unread_notification_count(db: Session, user_id: uuid.UUID) -> int:
     """Get count of unread notifications for a user."""
-    return (
+    print(f"🔍 CRUD get_unread_notification_count: user_id={user_id}")
+
+    # Debug: Check if any notifications exist for this user at all
+    total_count = (
         db.query(models.Notification)
-        .filter(
-            models.Notification.user_id == user_id, not models.Notification.read
-        )
+        .filter(models.Notification.user_id == user_id)
         .count()
     )
+    print(f"🔍 Total notifications for user: {total_count}")
+
+    # Debug: Check unread notifications
+    unread_count = (
+        db.query(models.Notification)
+        .filter(models.Notification.user_id == user_id, not models.Notification.read)
+        .count()
+    )
+    print(f"🔍 Unread notifications for user: {unread_count}")
+
+    return unread_count
 
 
 # Notification creation helpers
