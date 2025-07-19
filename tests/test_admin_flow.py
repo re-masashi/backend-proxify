@@ -29,9 +29,9 @@ def test_admin_review_workflow(
     }
 
     response = client.post("/alerts/", json=alert_data)
-    assert (
-        response.status_code == 201
-    ), f"Expected 201, got {response.status_code}: {response.text}"
+    assert response.status_code == 201, (
+        f"Expected 201, got {response.status_code}: {response.text}"
+    )
     alert_id = response.json()["id"]
     print(f"DEBUG: Created alert with ID: {alert_id}")
 
@@ -67,13 +67,13 @@ def test_admin_review_workflow(
     print(f"DEBUG: Admin2 response data: {response_data}")
 
     # The response should indicate the status change
-    assert (
-        response_data["status"] == "reviewed"
-    ), f"Expected 'reviewed', got '{response_data['status']}'"
+    assert response_data["status"] == "reviewed", (
+        f"Expected 'reviewed', got '{response_data['status']}'"
+    )
 
     # Refresh the database session to see the committed changes
     db_session.expire_all()
     alert = db_session.get(models.Alert, alert_id)
-    assert (
-        alert.status == "reviewed"
-    ), f"Alert status should be 'reviewed', got '{alert.status}'"
+    assert alert.status == "reviewed", (
+        f"Alert status should be 'reviewed', got '{alert.status}'"
+    )
