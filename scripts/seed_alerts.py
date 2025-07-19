@@ -7,7 +7,7 @@ from pathlib import Path
 from geoalchemy2 import WKTElement
 from sqlalchemy.orm import Session
 
-sys.path.append(Path.parent(Path.parent(Path.resolve(__file__))))
+sys.path.append(Path(Path(Path(__file__).resolve()).parent).parent)
 
 from app import models
 from app.database import engine
