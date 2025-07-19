@@ -2,9 +2,6 @@
 # Python version
 target-version = "py311"
 
-# Line length
-line-length = 88
-
 # Directories to check
 src = ["app", "tests"]
 
