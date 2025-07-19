@@ -87,3 +87,36 @@ class AdminReviewResponse(BaseModel):
     message: str
     alert_id: uuid.UUID
     status: str
+
+
+class NotificationBase(BaseModel):
+    title: str
+    message: str
+    type: str  # 'alert', 'admin', 'system'
+    data: dict = {}
+
+
+class NotificationCreate(NotificationBase):
+    user_id: uuid.UUID
+
+
+class NotificationResponse(NotificationBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationUpdate(BaseModel):
+    read: bool | None = None
+
+
+class NotificationSettings(BaseModel):
+    push_enabled: bool = True
+    nearby_alerts: bool = True
+    admin_updates: bool = True
+    system_notifications: bool = False
+    email_notifications: bool = False

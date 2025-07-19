@@ -18,6 +18,26 @@ from sqlalchemy.sql import func
 from .database import Base
 
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: uuid.UUID = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    title: str = Column(String, nullable=False)
+    message: str = Column(Text, nullable=False)
+    type: str = Column(String, nullable=False)  # 'alert', 'admin', 'system'
+    read: bool = Column(Boolean, nullable=False, default=False)
+    data: dict = Column(
+        JSONB, nullable=False, default={}
+    )  # Additional data like alert_id
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="notifications")
+
+
 class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -36,6 +56,9 @@ class User(Base):
     )
     featured_items = relationship("FeaturedItem", back_populates="user")
     reviews = relationship("AdminReview", back_populates="admin")
+    notifications = relationship(
+        "Notification", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Alert(Base):

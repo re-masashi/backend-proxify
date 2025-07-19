@@ -178,3 +178,134 @@ def get_user_alert_stats(db: Session, user_id: uuid.UUID) -> dict:
         "approved": approved,
         "rejected": rejected,
     }
+
+
+def create_notification(
+    db: Session, notification: schemas.NotificationCreate
+) -> models.Notification:
+    """Create a new notification for a user."""
+    db_notification = models.Notification(**notification.model_dump())
+    db.add(db_notification)
+    db.commit()
+    db.refresh(db_notification)
+    return db_notification
+
+
+def get_user_notifications(
+    db: Session, user_id: uuid.UUID, unread_only: bool = False, limit: int = 50
+) -> list[models.Notification]:
+    """Get notifications for a specific user."""
+    query = db.query(models.Notification).filter(models.Notification.user_id == user_id)
+
+    if unread_only:
+        query = query.filter(not models.Notification.read)
+
+    return query.order_by(models.Notification.created_at.desc()).limit(limit).all()
+
+
+def mark_notification_as_read(
+    db: Session, notification_id: uuid.UUID, user_id: uuid.UUID
+) -> models.Notification | None:
+    """Mark a notification as read (only if it belongs to the user)."""
+    notification = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.id == notification_id,
+            models.Notification.user_id == user_id,
+        )
+        .first()
+    )
+
+    if notification:
+        notification.read = True
+        db.commit()
+        db.refresh(notification)
+
+    return notification
+
+
+def mark_all_notifications_as_read(db: Session, user_id: uuid.UUID) -> int:
+    """Mark all notifications as read for a user. Returns count of updated notifications."""
+    updated_count = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.user_id == user_id, not models.Notification.read
+        )
+        .update({"read": True})
+    )
+
+    db.commit()
+    return updated_count
+
+
+def delete_notification(
+    db: Session, notification_id: uuid.UUID, user_id: uuid.UUID
+) -> bool:
+    """Delete a notification (only if it belongs to the user)."""
+    notification = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.id == notification_id,
+            models.Notification.user_id == user_id,
+        )
+        .first()
+    )
+
+    if notification:
+        db.delete(notification)
+        db.commit()
+        return True
+
+    return False
+
+
+def get_unread_notification_count(db: Session, user_id: uuid.UUID) -> int:
+    """Get count of unread notifications for a user."""
+    return (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.user_id == user_id, not models.Notification.read
+        )
+        .count()
+    )
+
+
+# Notification creation helpers
+def notify_alert_approved(db: Session, alert: models.Alert):
+    """Create notification when alert is approved."""
+    notification = schemas.NotificationCreate(
+        user_id=alert.user_id,
+        title="Alert Approved",
+        message=f"Your alert '{alert.description[:50]}...' has been approved and is now visible to the community.",
+        type="admin",
+        data={"alert_id": str(alert.id), "alert_type": alert.type},
+    )
+    return create_notification(db, notification)
+
+
+def notify_alert_rejected(db: Session, alert: models.Alert):
+    """Create notification when alert is rejected."""
+    notification = schemas.NotificationCreate(
+        user_id=alert.user_id,
+        title="Alert Rejected",
+        message=f"Your alert '{alert.description[:50]}...' was not approved. Please review our community guidelines.",
+        type="admin",
+        data={"alert_id": str(alert.id), "alert_type": alert.type},
+    )
+    return create_notification(db, notification)
+
+
+def notify_nearby_alert(db: Session, user_id: uuid.UUID, alert: models.Alert):
+    """Create notification for nearby alert."""
+    notification = schemas.NotificationCreate(
+        user_id=user_id,
+        title="New Alert Nearby",
+        message=f"A new {alert.type} alert has been reported near your location: {alert.description[:100]}...",
+        type="alert",
+        data={
+            "alert_id": str(alert.id),
+            "alert_type": alert.type,
+            "severity": alert.severity,
+        },
+    )
+    return create_notification(db, notification)

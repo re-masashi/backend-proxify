@@ -267,7 +267,6 @@ def review_alert(
     review: schemas.AdminReviewCreate,
     db: Annotated[Session, Depends(get_db)],
     admin_user: Annotated[models.User, Depends(get_current_admin_user)],
-    # models.User = Depends(get_current_admin_user),
 ):
     alert = crud.get_alert_by_id(db, alert_id=alert_id)
     if not alert:
@@ -285,21 +284,19 @@ def review_alert(
             status_code=400, detail="You have already voted on this alert."
         )
 
-    # Add the vote first
+    # Add the vote
     crud.add_admin_review(
         db=db, alert_id=alert_id, admin_id=admin_user.id, vote=review.vote
     )
-    db.flush()  # Ensure the vote is written to the database
+    db.flush()
 
-    # Now get the updated vote counts
+    # Get the updated vote counts
     approvals, rejections = crud.count_alert_votes(db, alert_id=alert_id)
-
-    print(
-        f"DEBUG: Alert {alert_id} - Approvals: {approvals}, Rejections: {rejections}"
-    )  # Debug line
 
     # Handle rejection logic
     if rejections >= 3:
+        # Create rejection notification before deleting alert
+        crud.notify_alert_rejected(db, alert)
         crud.delete_alert(db, alert=alert)
         db.commit()
         return {
@@ -310,7 +307,9 @@ def review_alert(
 
     # Handle approval logic
     if approvals >= 2:
-        alert.status = "reviewed"  # Update the status directly
+        alert.status = "reviewed"
+        # Create approval notification
+        crud.notify_alert_approved(db, alert)
         db.commit()
         return {
             "message": f"Alert {alert_id} has been approved with {approvals} votes.",
@@ -326,6 +325,93 @@ def review_alert(
         "status": alert.status,
     }
 
+
+router_notifications = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+@router_notifications.get("/", response_model=list[schemas.NotificationResponse])
+def get_notifications(
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+    unread_only: bool = False,
+    limit: int = 50,
+):
+    """Get notifications for the current user."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    notifications = crud.get_user_notifications(
+        db, user_id=user.id, unread_only=unread_only, limit=limit
+    )
+    return notifications
+
+
+@router_notifications.get("/count")
+def get_unread_count(
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    """Get count of unread notifications for the current user."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    count = crud.get_unread_notification_count(db, user_id=user.id)
+    return {"unread_count": count}
+
+
+@router_notifications.put("/{notification_id}/read")
+def mark_notification_read(
+    notification_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    """Mark a specific notification as read."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    notification = crud.mark_notification_as_read(db, notification_id, user.id)
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    return {"message": "Notification marked as read"}
+
+
+@router_notifications.put("/mark-all-read")
+def mark_all_notifications_read(
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    """Mark all notifications as read for the current user."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updated_count = crud.mark_all_notifications_as_read(db, user.id)
+    return {"message": f"Marked {updated_count} notifications as read"}
+
+
+@router_notifications.delete("/{notification_id}")
+def delete_notification(
+    notification_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    """Delete a specific notification."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    deleted = crud.delete_notification(db, notification_id, user.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    return {"message": "Notification deleted"}
+
+
+app.include_router(router_notifications)
 
 admin = Admin(app, engine, authentication_backend=authentication_backend)
 
