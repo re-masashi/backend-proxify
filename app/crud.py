@@ -135,3 +135,46 @@ def delete_alert(db: Session, alert: models.Alert):
 
 #     print(f"DEBUG: Counting votes for alert {alert_id}: {approvals} approvals, {rejections} rejections")
 #     return approvals, rejections
+
+
+def get_user_alerts(
+    db: Session, user_id: uuid.UUID, status: str | None = None, limit: int = 50
+) -> list[models.Alert]:
+    """Get all alerts for a specific user, optionally filtered by status."""
+    query = (
+        db.query(models.Alert)
+        .options(joinedload(models.Alert.user))
+        .filter(models.Alert.user_id == user_id)
+    )
+
+    if status:
+        query = query.filter(models.Alert.status == status)
+
+    return query.order_by(models.Alert.created_at.desc()).limit(limit).all()
+
+
+def get_user_alert_stats(db: Session, user_id: uuid.UUID) -> dict:
+    """Get statistics about a user's alerts."""
+    total = db.query(models.Alert).filter(models.Alert.user_id == user_id).count()
+    pending = (
+        db.query(models.Alert)
+        .filter(models.Alert.user_id == user_id, models.Alert.status == "pending")
+        .count()
+    )
+    approved = (
+        db.query(models.Alert)
+        .filter(models.Alert.user_id == user_id, models.Alert.status == "reviewed")
+        .count()
+    )
+    rejected = (
+        db.query(models.Alert)
+        .filter(models.Alert.user_id == user_id, models.Alert.status == "rejected")
+        .count()
+    )
+
+    return {
+        "total": total,
+        "pending": pending,
+        "approved": approved,
+        "rejected": rejected,
+    }

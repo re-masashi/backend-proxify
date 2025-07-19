@@ -13,7 +13,7 @@ from fastapi import (
     status,
 )
 from sqladmin import Admin
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from svix.webhooks import Webhook, WebhookVerificationError
 
 from . import crud, models, schemas
@@ -110,6 +110,49 @@ def get_alerts(
     )
 
     return alerts
+
+
+@router_alerts.get("/my-alerts", response_model=list[schemas.AlertResponse])
+def get_my_alerts(
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+    status: str | None = None,  # Optional filter by status
+    limit: int = 50,
+):
+    """Get all alerts created by the current user."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Build the query
+    query = (
+        db.query(models.Alert)
+        .options(joinedload(models.Alert.user))
+        .filter(models.Alert.user_id == user.id)
+    )
+
+    # Apply status filter if provided
+    if status and status != "all":
+        query = query.filter(models.Alert.status == status)
+
+    # Order by creation date (newest first) and limit results
+    alerts = query.order_by(models.Alert.created_at.desc()).limit(limit).all()
+
+    return alerts
+
+
+@router_alerts.get("/my-alerts/stats")
+def get_my_alert_stats(
+    db: Annotated[Session, Depends(get_db)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    """Get statistics about the current user's alerts."""
+    user = crud.get_user_by_clerk_id(db, clerk_user_id=current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    stats = crud.get_user_alert_stats(db, user_id=user.id)
+    return stats
 
 
 @router_alerts.get("/nearby", response_model=list[schemas.AlertResponse])
