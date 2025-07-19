@@ -1,8 +1,13 @@
 # tests/test_api_integration.py
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import User
 
 
-def test_complete_alert_workflow(client: TestClient, db_session, test_user, test_admin):
+def test_complete_alert_workflow(
+    client: TestClient, db_session: Session, test_user: User, test_admin
+):
     """Test the complete alert workflow from creation to approval"""
 
     # 1. User creates alert
@@ -20,7 +25,9 @@ def test_complete_alert_workflow(client: TestClient, db_session, test_user, test
 
     # 2. Alert should not appear in public listing (not approved yet)
     public_response = client.get("/alerts/")
-    assert create_response.status_code == 200
+    assert (
+        public_response.status_code == 200
+    )  # Fix: Check public_response, not create_response
     alert_ids = [alert["id"] for alert in public_response.json()]
     assert alert_id not in alert_ids
 
@@ -37,7 +44,7 @@ def test_complete_alert_workflow(client: TestClient, db_session, test_user, test
     )
     assert review_response1.status_code == 200
 
-    # 5. Alert still not in public listing
+    # 5. Alert still not in public listing (needs 2 approvals)
     public_response = client.get("/alerts/")
     alert_ids = [alert["id"] for alert in public_response.json()]
     assert alert_id not in alert_ids
