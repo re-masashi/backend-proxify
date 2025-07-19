@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
 
@@ -58,6 +58,19 @@ def get_pending_alerts(db: Session):
 
 def get_alert_by_id(db: Session, alert_id: uuid.UUID) -> models.Alert | None:
     return db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+
+
+def get_alerts(db: Session, status: str = "reviewed", limit: int = 50):
+    return (
+        db.query(models.Alert)
+        .options(
+            joinedload(models.Alert.user)  # Single JOIN query, not N+1
+        )
+        .filter(models.Alert.status == status)
+        .order_by(models.Alert.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def get_review_by_admin_and_alert(

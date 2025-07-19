@@ -60,8 +60,22 @@ class AlertResponse(BaseModel):
     attachments: list[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    # Add this:
+    user_email: str = None
+
+    @classmethod
+    def from_alert(cls, alert):
+        return cls(
+            id=alert.id,
+            user_id=alert.user_id,
+            description=alert.description,
+            type=alert.type,
+            status=alert.status,
+            severity=alert.severity,
+            attachments=alert.attachments,
+            created_at=alert.created_at,
+            user_email=alert.user.email if alert.user else "Anonymous",
+        )
 
 
 # --- Admin Schemas ---
