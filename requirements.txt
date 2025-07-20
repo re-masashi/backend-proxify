@@ -10,6 +10,14 @@ python-jose[cryptography]
 sqladmin
 requests
 
+# for opentelemetry
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-requests
+opentelemetry-exporter-jaeger
+opentelemetry-exporter-prometheus
+
 # for tests
 pytest
 pytest-cov

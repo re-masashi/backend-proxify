@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import sys
 import uuid
 from typing import Annotated
 
@@ -12,6 +14,7 @@ from fastapi import (
     Response,
     status,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from sqladmin import Admin
 from sqlalchemy.orm import Session, joinedload
 from svix.webhooks import Webhook, WebhookVerificationError
@@ -28,6 +31,16 @@ from .admin_auth import authentication_backend
 from .core import settings
 from .database import engine, get_db
 from .dependencies import get_current_admin_user, get_current_user_id
+from .telemetry import configure_telemetry
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("app.log")],
+)
+
+logger = logging.getLogger(__name__)
 
 # Create all database tables on startup
 models.Base.metadata.create_all(bind=engine)
@@ -449,3 +462,24 @@ app.include_router(router_admin)
 def health_check():
     """Endpoint for uptime monitoring to keep the free Render instance alive."""
     return {"status": "ok"}
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+configure_telemetry(app)
+
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("🚀 Proxify API starting up...")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("🛑 Proxify API shutting down...")
