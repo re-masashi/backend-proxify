@@ -17,7 +17,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from sqladmin import Admin
-from sqlalchemy import and_, or_, text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session, joinedload
 from svix.webhooks import Webhook, WebhookVerificationError
 
@@ -130,131 +130,89 @@ def get_alerts(
 @router_alerts.get("/search", response_model=list[schemas.AlertResponse])
 def search_alerts(
     db: Annotated[Session, Depends(get_db)],
-    q: str = Query(..., min_length=2, description="Search query"),
-    type_filter: str | None = Query(None, description="Filter by alert type"),
-    severity_min: int | None = Query(None, ge=1, le=4, description="Minimum severity"),
-    severity_max: int | None = Query(None, ge=1, le=4, description="Maximum severity"),
-    status: str | None = Query(None, description="Filter by status"),
-    lat: float | None = Query(None, description="User latitude for distance sorting"),
-    lon: float | None = Query(None, description="User longitude for distance sorting"),
-    radius_km: float | None = Query(10, description="Search radius in km"),
-    limit: int = Query(50, le=100, description="Maximum number of results"),
+    q: str = Query(..., min_length=2),
+    lat: float | None = Query(None),
+    lon: float | None = Query(None),
+    radius_km: float | None = Query(10),
+    limit: int = Query(50, le=100),
 ):
-    """
-    Search alerts with various filters and sorting options.
-    """
     try:
-        # Base query
+        # Base query with text search
         query = db.query(models.Alert).filter(models.Alert.status != "pending")
 
-        # Text search in description
         if q:
-            search_terms = q.strip().split()
-            search_conditions = []
-
-            for term in search_terms:
-                term_pattern = f"%{term}%"
-                search_conditions.append(
-                    or_(
-                        models.Alert.description.ilike(term_pattern),
-                        models.Alert.type.ilike(term_pattern),
-                    )
+            search_pattern = f"%{q}%"
+            query = query.filter(
+                or_(
+                    models.Alert.description.ilike(search_pattern),
+                    models.Alert.type.ilike(search_pattern),
                 )
+            )
 
-            if search_conditions:
-                query = query.filter(and_(*search_conditions))
-
-        # Type filter
-        if type_filter:
-            query = query.filter(models.Alert.type == type_filter)
-
-        # Severity filters
-        if severity_min is not None:
-            query = query.filter(models.Alert.severity >= severity_min)
-        if severity_max is not None:
-            query = query.filter(models.Alert.severity <= severity_max)
-
-        # Status filter
-        if status:
-            query = query.filter(models.Alert.status == status)
-
-        # Location-based filtering
+        # Location filtering (if provided)
         if lat is not None and lon is not None:
-            # Use PostGIS ST_DWithin for efficient radius search
-            text(f"ST_Point({lon}, {lat})")
+            # Simple radius filtering using ST_DWithin
             query = query.filter(
                 text(
                     f"ST_DWithin(location, ST_Point({lon}, {lat}), {radius_km * 1000})"
                 )
             )
 
-            # Add distance calculation and ordering
-            distance_expr = text(f"""
-                ST_Distance(
-                    ST_Transform(location, 3857),
-                    ST_Transform(ST_Point({lon}, {lat}), 3857)
-                ) / 1000 as distance_km
-            """)
+        # Get results and calculate distances in Python
+        results = query.order_by(models.Alert.created_at.desc()).limit(limit).all()
 
-            query = query.add_columns(distance_expr).order_by(text("distance_km ASC"))
-        else:
-            # Default ordering by creation time
-            query = query.order_by(models.Alert.created_at.desc())
-
-        # Apply limit
-        results = query.limit(limit).all()
-
-        # Format results
         alerts = []
-        for result in results:
-            if lat is not None and lon is not None and len(result) > 1:
-                # Result includes distance
-                alert, distance = result
-                alert_dict = {
-                    "id": str(alert.id),
-                    "description": alert.description,
-                    "type": alert.type,
-                    "status": alert.status,
-                    "severity": alert.severity,
-                    "created_at": alert.created_at,
-                    "location": {
-                        "type": "Point",
-                        "coordinates": [
-                            float(alert.location.x),
-                            float(alert.location.y),
-                        ],
-                    },
-                    "distance_km": round(float(distance), 2) if distance else None,
-                    "user_email": alert.user.email if alert.user else None,
-                }
-            else:
-                # Standard result without distance
-                alert = result if isinstance(result, models.Alert) else result[0]
-                alert_dict = {
-                    "id": str(alert.id),
-                    "description": alert.description,
-                    "type": alert.type,
-                    "status": alert.status,
-                    "severity": alert.severity,
-                    "created_at": alert.created_at,
-                    "location": {
-                        "type": "Point",
-                        "coordinates": [
-                            float(alert.location.x),
-                            float(alert.location.y),
-                        ],
-                    },
-                    "user_email": alert.user.email if alert.user else None,
-                }
+        for alert in results:
+            alert_dict = {
+                "id": str(alert.id),
+                "description": alert.description,
+                "type": alert.type,
+                "status": alert.status,
+                "severity": alert.severity,
+                "created_at": alert.created_at,
+                "location": {
+                    "type": "Point",
+                    "coordinates": [float(alert.location.x), float(alert.location.y)],
+                },
+                "user_email": alert.user.email if alert.user else None,
+            }
+
+            # Calculate distance in Python if user location provided
+            if lat is not None and lon is not None:
+                import math
+
+                # Haversine formula for distance calculation
+                r = 6371  # Earth's radius in km
+                lat1, lon1 = math.radians(lat), math.radians(lon)
+                lat2, lon2 = (
+                    math.radians(float(alert.location.y)),
+                    math.radians(float(alert.location.x)),
+                )
+
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+
+                a = (
+                    math.sin(dlat / 2) ** 2
+                    + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+                )
+                c = 2 * math.asin(math.sqrt(a))
+                distance = r * c
+
+                alert_dict["distance_km"] = round(distance, 2)
 
             alerts.append(alert_dict)
+
+        # Sort by distance if location provided
+        if lat is not None and lon is not None:
+            alerts.sort(key=lambda x: x.get("distance_km", float("inf")))
 
         print(f"🔍 Search query: '{q}' returned {len(alerts)} results")
         return alerts
 
     except Exception as e:
         print(f"🔴 Search error: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {e!s}") from None
+        raise HTTPException(status_code=500, detail=f"Search failed: {e!s}") from e
 
 
 @router_alerts.get("/my-alerts", response_model=list[schemas.AlertResponse])
