@@ -39,9 +39,7 @@ def configure_telemetry(app):
 
     # Configure metrics (optional)
     prometheus_reader = PrometheusMetricReader()
-    MeterProvider(
-        resource=resource, metric_readers=[prometheus_reader]
-    )
+    MeterProvider(resource=resource, metric_readers=[prometheus_reader])
 
     # Instrument FastAPI
     FastAPIInstrumentor.instrument_app(app)
